@@ -1,3 +1,5 @@
+# Connecting VPN with OpenVPN on Device Farm
+
 ## Set up the Appium Python environment
 
 1. We recommend setting up [Python's virtualenv](https://pypi.python.org/pypi/virtualenv) for developing and packaging tests so that unnecessary dependencies are not including in the bundled zip file.
@@ -15,4 +17,8 @@
 
 ## Running tests on AWS Device Farm
 
-Follow these [instructions](http://docs.aws.amazon.com/devicefarm/latest/developerguide/test-types-android-appium-python.html#test-types-android-appium-python-upload), upload **test_bundle.zip** on Step 9.
+Follow these [instructions](https://docs.aws.amazon.com/devicefarm/latest/developerguide/getting-started.html). After creating your project, follow these instructions to run our sample test:
+
+1. On step 1, **Choose application**, select **Test a web application**.
+2. On step 2, **Configure your test**, select Appium Python and upload the **test_bundle.zip**.
+3. On step 2, choose **Run your test in a custom environment** and copy and paste our **device-farm/demo-phases.yml** spec file.
