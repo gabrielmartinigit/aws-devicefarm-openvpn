@@ -1,0 +1,89 @@
+version: 0.1
+
+phases:
+  install:
+    commands:
+      - export PYTHON_VERSION=3
+      - cd $DEVICEFARM_TEST_PACKAGE_PATH
+      - . bin/activate
+      - pip install -r requirements.txt
+      - export APPIUM_VERSION=1.14.2
+      - avm $APPIUM_VERSION
+      - ln -s /usr/local/avm/versions/$APPIUM_VERSION/node_modules/.bin/appium  /usr/local/avm/versions/$APPIUM_VERSION/node_modules/appium/bin/appium.js
+      - >-
+        if [ $(echo $APPIUM_VERSION | cut -d "." -f2) -ge 15 ];
+        then
+          DEVICEFARM_DEVICE_UDID_FOR_APPIUM=$(echo $DEVICEFARM_DEVICE_UDID | tr -d "-");
+          DEVICEFARM_WDA_DERIVED_DATA_PATH=$DEVICEFARM_WDA_DERIVED_DATA_PATH_V2;
+        else
+          DEVICEFARM_DEVICE_UDID_FOR_APPIUM=$DEVICEFARM_DEVICE_UDID;
+          DEVICEFARM_WDA_DERIVED_DATA_PATH=$DEVICEFARM_WDA_DERIVED_DATA_PATH_V1;
+        fi
+
+  pre_test:
+    commands:
+      - >-
+        if [ $DEVICEFARM_DEVICE_PLATFORM_NAME = "Android" ];
+        then
+        echo "Start appium server for android";
+        (appium --log-timestamp
+        --default-capabilities "{\"deviceName\": \"$DEVICEFARM_DEVICE_NAME\", \"platformName\":\"$DEVICEFARM_DEVICE_PLATFORM_NAME\",
+        \"app\":\"$DEVICEFARM_APP_PATH\", \"udid\":\"$DEVICEFARM_DEVICE_UDID\", \"platformVersion\":\"$DEVICEFARM_DEVICE_OS_VERSION\",
+        \"browserName\":\"Chrome\", \"chromedriverExecutable\":\"$DEVICEFARM_CHROMEDRIVER_EXECUTABLE\"}"
+        >> $DEVICEFARM_LOG_DIR/appiumlog.txt 2>&1 &);
+        fi
+      - >-
+        if [ $DEVICEFARM_DEVICE_PLATFORM_NAME = "iOS" ];
+        then
+        echo "Start appium server for iOS";
+        (appium --log-timestamp
+        --default-capabilities "{\"usePrebuiltWDA\": true, \"derivedDataPath\":\"$DEVICEFARM_WDA_DERIVED_DATA_PATH\",
+        \"deviceName\": \"$DEVICEFARM_DEVICE_NAME\", \"platformName\":\"$DEVICEFARM_DEVICE_PLATFORM_NAME\", \"app\":\"$DEVICEFARM_APP_PATH\",
+        \"automationName\":\"XCUITest\", \"udid\":\"$DEVICEFARM_DEVICE_UDID_FOR_APPIUM\", \"platformVersion\":\"$DEVICEFARM_DEVICE_OS_VERSION\", \"browserName\":\"Safari\"}"
+        >> $DEVICEFARM_LOG_DIR/appiumlog.txt 2>&1 &);
+        fi
+      - >-
+        start_appium_timeout=0;
+        while [ true ];
+        do
+            if [ $start_appium_timeout -gt 60 ];
+            then
+                echo "appium server never started in 60 seconds. Exiting";
+                exit 1;
+            fi;
+            grep -i "Appium REST http interface listener started on 0.0.0.0:4723" $DEVICEFARM_LOG_DIR/appiumlog.txt >> /dev/null 2>&1;
+            if [ $? -eq 0 ];
+            then
+                echo "Appium REST http interface listener started on 0.0.0.0:4723";
+                break;
+            else
+                echo "Waiting for appium server to start. Sleeping for 1 second";
+                sleep 1;
+                start_appium_timeout=$((start_appium_timeout+1));
+            fi;
+        done;
+
+  test:
+    commands:
+      # Testing VPN
+      - deactivate
+      - export PYTHON_VERSION=2
+      - pip install uiautomator
+      - curl https://martinig-static-assets.s3.amazonaws.com/reconnect_vpn.py -o reconnect_vpn.py
+      - python -u reconnect_vpn.py
+      # - curl 10.192.21.35
+      # - curl https://martinig-static-assets.s3.amazonaws.com/ui_test.py -o ui_test.py
+      # - python -u ui_test.py
+      # Starting App Tests
+      - echo "Navigate to test package directory"
+      - cd $DEVICEFARM_TEST_PACKAGE_PATH
+      - export PYTHON_VERSION=3
+      - . bin/activate
+      - echo "Start Appium Python test"
+      - py.test tests/ --junit-xml $DEVICEFARM_LOG_DIR/junitreport.xml
+
+  post_test:
+    commands:
+
+artifacts:
+  - $DEVICEFARM_LOG_DIR
